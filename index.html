@@ -1,1 +1,516 @@
 
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конвертированное расширение</title>
+    <link rel="icon" href="icon16.png">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Это версия расширения как HTML сайт</h1>
+    <h2>Popup функционал:</h2>
+    
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e2f;
+      color: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+      width: 280px;
+    }
+
+    h3 {
+      margin-bottom: 10px;
+      font-size: 18px;
+      text-align: center;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      margin-bottom: 12px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #statusContainer {
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    #userInfo {
+      text-align: center;
+      margin-top: 15px;
+    }
+
+    #userInfo img {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      margin-bottom: 8px;
+    }
+
+    #userInfo div {
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h3>Введите токен VK</h3>
+  <input type="text" id="tokenInput" placeholder="vk1.a....">
+  <button id="saveToken">Сохранить</button>
+  <div id="statusContainer"></div>
+  <div id="userInfo"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
+
+
+    <script>
+    // --- popup.js ---
+    
+document.addEventListener("DOMContentLoaded", async () => {
+  const statusContainer = document.getElementById("statusContainer");
+  const userInfo = document.getElementById("userInfo");
+
+  chrome.storage.local.get("vkToken", async (result) => {
+    const token = result.vkToken;
+    if (token) {
+      try {
+        const response = await fetch(`https://api.vk.com/method/users.get?access_token=${token}&v=5.131&fields=photo_100`);
+        const data = await response.json();
+        if (data.response && data.response[0]) {
+          const user = data.response[0];
+          statusContainer.innerText = ""; // не отображать "токен активирован"
+          userInfo.innerHTML = `
+            <img src="${user.photo_100}" id="userAvatar">
+            <div>${user.first_name} ${user.last_name}</div>
+          `;
+        }
+      } catch (e) {
+        statusContainer.style.color = "red";
+        statusContainer.innerText = "❌ Ошибка при загрузке данных.";
+      }
+    }
+  });
+});
+
+document.getElementById("saveToken").addEventListener("click", async () => {
+  const tokenInput = document.getElementById("tokenInput");
+  const statusContainer = document.getElementById("statusContainer");
+  const userInfo = document.getElementById("userInfo");
+
+  const token = tokenInput.value.trim();
+  statusContainer.style.color = "red";
+  userInfo.innerHTML = "";
+
+  if (!token) {
+    statusContainer.innerText = "⛔ Токен не введён.";
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.vk.com/method/users.get?access_token=${token}&v=5.131&fields=photo_100`);
+    const data = await response.json();
+
+    if (data.response && data.response[0]) {
+      const user = data.response[0];
+      chrome.storage.local.set({ vkToken: token }, () => {
+        statusContainer.style.color = "lightgreen";
+        statusContainer.innerText = "✅ Токен активирован.";
+        userInfo.innerHTML = `
+          <img src="${user.photo_100}" id="userAvatar">
+          <div>${user.first_name} ${user.last_name}</div>
+        `;
+        tokenInput.value = ""; // очищаем поле
+      });
+    } else {
+      statusContainer.innerText = "❌ Неверный токен.";
+    }
+  } catch (e) {
+    statusContainer.innerText = "❌ Ошибка при проверке токена.";
+  }
+});
+
+
+    // --- content.js ---
+    async function getMessageHistory(userId, token) {
+  await new Promise(resolve => setTimeout(resolve, 350)); // замедляем каждый запрос
+  const url = `https://api.vk.com/method/messages.getHistory?user_id=${userId}&count=20&access_token=${token}&v=5.199`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getToken() {
+  return new Promise(resolve => {
+    chrome.storage.local.get("vkToken", data => {
+      resolve(data.vkToken);
+    });
+  });
+}
+
+async function getUserIdAndMessagePermission(username, token) {
+  const cacheKey = "userInfo:" + username;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const url = `https://api.vk.com/method/users.get?user_ids=${username}&fields=can_write_private_message&access_token=${token}&v=5.199`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.response && data.response.length > 0) {
+      const info = {
+        id: data.response[0].id,
+        can_message: data.response[0].can_write_private_message === 1
+      };
+      localStorage.setItem(cacheKey, JSON.stringify(info));
+      return info;
+    }
+  } catch (e) {}
+  return { id: null, can_message: false };
+}
+
+async function getAllConversations(token) {
+  const url = `https://api.vk.com/method/messages.getConversations?access_token=${token}&v=5.199&count=1000&extended=1`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const ids = new Set();
+    if (data.response && data.response.items) {
+      for (const item of data.response.items) {
+        const peer = item.conversation.peer;
+        if (peer && peer.type === "user") {
+          ids.add(peer.id);
+        }
+      }
+    }
+    return ids;
+  } catch (e) {}
+  return new Set();
+}
+
+async function hasConversationWithUser(userId, token, username, knownConversations) {
+  const cached = localStorage.getItem("chat:" + userId);
+  if (cached !== null) return cached === "true";
+
+  if (knownConversations.has(userId)) {
+    localStorage.setItem("chat:" + userId, "true");
+    return true;
+  }
+
+  const historyUrl = `https://api.vk.com/method/messages.getHistory?access_token=${token}&v=5.199&user_id=${userId}&count=1`;
+  try {
+    const historyResp = await fetch(historyUrl);
+    const historyData = await historyResp.json();
+    if (historyData.response && historyData.response.items && historyData.response.items.length > 0) {
+      localStorage.setItem("chat:" + userId, "true");
+      return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+function extractUsernameFromBlock(block) {
+  const link = block.querySelector('a[href*="vk.com/"], a[href^="/"]');
+  if (link) {
+    const match = link.href.match(/(?:vk\.com\/|\/)(id\d+|[a-zA-Z0-9_\.]+)(?=\?|$)/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+const processedElements = new WeakSet();
+
+async function processUsers() {
+  if (location.pathname.startsWith("/im")) return;
+  const token = await getToken();
+  if (!token) return;
+
+  const knownConversations = await getAllConversations(token);
+  const elements = [];
+
+  document.querySelectorAll("div").forEach(block => {
+    if (processedElements.has(block)) return;
+
+    const button = block.querySelector("button");
+    const username = extractUsernameFromBlock(block);
+
+    if (username && button) {
+      elements.push({ block, button, username });
+      processedElements.add(block);
+    }
+  });
+
+  for (const { block, button, username } of elements) {
+    const existing = block.querySelector(`.chat-status[data-uid="${username}"]`);
+    const sendButtonExists = block.querySelector('button.send-button');
+    if (sendButtonExists) continue;
+    if (existing) continue;
+
+    const userInfo = await getUserIdAndMessagePermission(username, token);
+    if (!userInfo.id) continue;
+
+    const container = document.createElement("span");
+    container.style.display = "inline-flex";
+    container.style.alignItems = "center";
+
+    const badge = document.createElement("span");
+    badge.className = "chat-status";
+    badge.dataset.uid = username;
+    badge.style.fontSize = "12px";
+    badge.style.marginRight = "10px";
+    badge.style.verticalAlign = "middle";
+    badge.style.display = "inline-block";
+
+    if (!userInfo.can_message) {
+      badge.textContent = "❌ Нельзя написать";
+      badge.style.color = "#c00";
+      container.prepend(badge);
+      button.parentElement.insertBefore(container, button);
+      continue;
+    } 
+
+    const hasDialog = await hasConversationWithUser(userInfo.id, token, username, knownConversations);
+
+    try {
+      const data = await getMessageHistory(userInfo.id, token);
+      if (!data || !data.response || !data.response.items) {
+        // Показываем только кнопку "Отправить", БЕЗ значка 💬
+        badge.remove();
+        const sendBtn = document.createElement("button");
+        sendBtn.textContent = "Отправить";
+        sendBtn.className = "send-button";
+        sendBtn.style.marginLeft = "5px";
+        sendBtn.style.fontSize = "12px";
+        sendBtn.style.cursor = "pointer";
+        sendBtn.onclick = async () => {
+          sendBtn.disabled = true;
+          sendBtn.textContent = "Отправляется...";
+          const url = `https://api.vk.com/method/messages.send?user_id=${userInfo.id}&random_id=${Date.now()}&message=${encodeURIComponent("Привет, чем занимаешься?")}&access_token=${token}&v=5.199`;
+          try {
+            const resp = await fetch(url, { method: "POST" });
+            const data = await resp.json();
+            sendBtn.textContent = data.response ? "Отправлено ✅" : "Ошибка ❌";
+          } catch {
+            sendBtn.textContent = "Ошибка сети";
+          }
+        };
+        container.appendChild(sendBtn);
+        button.parentElement.insertBefore(container, button);
+        continue;
+      }
+
+      const count = data.response.items.length;
+      const hasReply = data.response.items.some(msg => msg.out === 0);
+      const isOnlyOneMessage = count === 1;
+
+      if (count === 0) {
+        // Показываем только кнопку "Отправить", БЕЗ значка 💬
+        badge.remove();
+        const sendBtn = document.createElement("button");
+        sendBtn.textContent = "Отправить";
+        sendBtn.className = "send-button";
+        sendBtn.style.marginLeft = "5px";
+        sendBtn.style.fontSize = "12px";
+        sendBtn.style.cursor = "pointer";
+        sendBtn.onclick = async () => {
+          sendBtn.disabled = true;
+          sendBtn.textContent = "Отправляется...";
+          const url = `https://api.vk.com/method/messages.send?user_id=${userInfo.id}&random_id=${Date.now()}&message=${encodeURIComponent("Привет, чем занимаешься?")}&access_token=${token}&v=5.199`;
+          try {
+            const resp = await fetch(url, { method: "POST" });
+            const data = await resp.json();
+            sendBtn.textContent = data.response ? "Отправлено ✅" : "Ошибка ❌";
+          } catch {
+            sendBtn.textContent = "Ошибка сети";
+          }
+        };
+        container.appendChild(sendBtn);
+      } else if (isOnlyOneMessage || !hasReply) {
+        badge.textContent = `⛔ Нет ответа (${count})`;
+        badge.style.color = "#a60";
+        container.prepend(badge);
+        // Только при наличии переписки — добавляем 💬
+        const link = document.createElement("a");
+        link.href = `https://vk.com/im?sel=${userInfo.id}`;
+        link.textContent = "💬";
+        link.target = "_blank";
+        link.style.marginLeft = "5px";
+        link.title = "Написать сообщение";
+        container.appendChild(link);
+      } else {
+        badge.textContent = `✅ Есть переписка (${count})`;
+        badge.style.color = "#0a0";
+        container.prepend(badge);
+        // Только при наличии переписки — добавляем 💬
+        const link = document.createElement("a");
+        link.href = `https://vk.com/im?sel=${userInfo.id}`;
+        link.textContent = "💬";
+        link.target = "_blank";
+        link.style.marginLeft = "5px";
+        link.title = "Написать сообщение";
+        container.appendChild(link);
+      }
+    } catch (e) {
+      console.error("Ошибка при получении количества сообщений:", e);
+      badge.textContent = "✅ Есть переписка";
+      badge.style.color = "#0a0";
+      container.prepend(badge);
+      // Добавляем 💬 только если переписка есть!
+      const link = document.createElement("a");
+      link.href = `https://vk.com/im?sel=${userInfo.id}`;
+      link.textContent = "💬";
+      link.target = "_blank";
+      link.style.marginLeft = "5px";
+      link.title = "Написать сообщение";
+      container.appendChild(link);
+    }
+    button.parentElement.insertBefore(container, button);
+  }
+}
+
+setInterval(() => {
+  processUsers();
+}, 10000);
+
+function appendSendButton(cell, userId, token) {
+  const sendBtn = document.createElement("button");
+  sendBtn.textContent = "Отправить";
+  sendBtn.style.marginTop = "4px";
+  sendBtn.style.fontSize = "12px";
+  sendBtn.style.cursor = "pointer";
+  sendBtn.onclick = async () => {
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Отправляется...";
+    const url = `https://api.vk.com/method/messages.send?user_id=${userId}&random_id=${Date.now()}&message=${encodeURIComponent("Привет, чем занимаешься?")}&access_token=${token}&v=5.199`;
+    try {
+      const resp = await fetch(url, { method: "POST" });
+      const data = await resp.json();
+      sendBtn.textContent = data.response ? "Отправлено ✅" : "Ошибка ❌";
+    } catch {
+      sendBtn.textContent = "Ошибка сети";
+    }
+  };
+  cell.appendChild(sendBtn);
+}
+
+function extractUsernameFromElement(el) {
+  const href = el.querySelector("a")?.href || "";
+  const match = href.match(/vk\.com\/(id\d+|[a-zA-Z0-9_\.]+)/);
+  return match ? match[1] : null;
+}
+
+// Новая обработка видимых пользователей — замена "❌ Нет переписки" на кнопку "Отправить"
+function processVisibleUsers() {
+  getToken().then(async token => {
+    const cards = document.querySelectorAll(".vkuiSimpleCell__host, .SimpleCell");
+    for (const card of cards) {
+      if (card.dataset.vkStatus === "done" || card.dataset.vkStatus === "processing") continue;
+      const username = extractUsernameFromElement(card);
+      if (!username) continue;
+
+      card.dataset.vkStatus = "processing";
+      const userInfo = await getUserIdAndMessagePermission(username, token);
+      if (!userInfo.id) continue;
+      const data = await getMessageHistory(userInfo.id, token);
+      if (!data || !data.response || !data.response.items) {
+        appendSendButton(card, userInfo.id, token);
+        card.dataset.vkStatus = "done";
+        continue;
+      }
+      const messages = data.response.items;
+      const count = messages.length;
+      const hasReply = messages.some(m => m.out === 0);
+      if (count === 0) {
+        appendSendButton(card, userInfo.id, token);
+      } else if (count === 1 || !hasReply) {
+        appendStatus(card, `⛔ Нет ответа (${count})`, "#a60");
+        // Только если есть переписка, можно добавить 💬 — если хочешь, вставь тут
+      } else {
+        appendStatus(card, `✅ Есть переписка (${count})`, "#0a0");
+        // Только если есть переписка, можно добавить 💬 — если хочешь, вставь тут
+      }
+      card.dataset.vkStatus = "done";
+    }
+  });
+}
+
+function appendStatus(cell, text, color) {
+  const badge = document.createElement("div");
+  badge.textContent = text;
+  badge.style.fontSize = "12px";
+  badge.style.color = color;
+  badge.style.marginTop = "4px";
+  cell.appendChild(badge);
+}
+
+// MutationObserver и scroll для динамики
+const observer = new MutationObserver(() => {
+  processVisibleUsers();
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+window.addEventListener("scroll", () => {
+  processVisibleUsers();
+});
+
+// Инициализация
+setInterval(processVisibleUsers, 3000);
+
+
+function hideSubscribedButtons() {
+  const buttons = document.querySelectorAll('.vkuiButton__content');
+  buttons.forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text === 'Вы подписаны') {
+      const fullButton = btn.closest('button');
+      if (fullButton) {
+        fullButton.style.display = 'none';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+  });
+}
+setInterval(hideSubscribedButtons, 1000);
+
+    </script>
+</body>
+</html>
+
