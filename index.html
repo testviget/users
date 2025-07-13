@@ -4,15 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Конвертированное расширение</title>
+    <title>HTML версия расширения</title>
     <link rel="icon" href="icon16.png">
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
     </style>
 </head>
 <body>
-    <h1>Это версия расширения как HTML сайт</h1>
-    <h2>Popup функционал:</h2>
+    <h1>HTML версия расширения без Chrome API и VK API</h1>
+    <h2>Интерфейс:</h2>
     
 <!DOCTYPE html>
 <html>
@@ -97,13 +97,13 @@
 
 
     <script>
-    // --- popup.js ---
+    // Заглушка chrome.storage.local
     
 document.addEventListener("DOMContentLoaded", async () => {
   const statusContainer = document.getElementById("statusContainer");
   const userInfo = document.getElementById("userInfo");
 
-  chrome.storage.local.get("vkToken", async (result) => {
+  function fakeStorageGet(key, callback) { callback({ [key]: JSON.parse(localStorage.getItem(key)) }); }("vkToken", async (result) => {
     const token = result.vkToken;
     if (token) {
       try {
@@ -145,7 +145,7 @@ document.getElementById("saveToken").addEventListener("click", async () => {
 
     if (data.response && data.response[0]) {
       const user = data.response[0];
-      chrome.storage.local.set({ vkToken: token }, () => {
+      function fakeStorageSet(obj, callback) { for (const k in obj) { localStorage.setItem(k, JSON.stringify(obj[k])); } if(callback) callback(); }({ vkToken: token }, () => {
         statusContainer.style.color = "lightgreen";
         statusContainer.innerText = "✅ Токен активирован.";
         userInfo.innerHTML = `
@@ -163,7 +163,7 @@ document.getElementById("saveToken").addEventListener("click", async () => {
 });
 
 
-    // --- content.js ---
+    // Контент-скрипт очищенный
     async function getMessageHistory(userId, token) {
   await new Promise(resolve => setTimeout(resolve, 350)); // замедляем каждый запрос
   const url = `https://api.vk.com/method/messages.getHistory?user_id=${userId}&count=20&access_token=${token}&v=5.199`;
@@ -513,4 +513,3 @@ setInterval(hideSubscribedButtons, 1000);
     </script>
 </body>
 </html>
-
