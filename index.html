@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTML версия расширения</title>
+    <title>Переписанное расширение как HTML</title>
     <link rel="icon" href="icon16.png">
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
     </style>
 </head>
 <body>
-    <h1>HTML версия расширения без Chrome API и VK API</h1>
+    <h1>HTML версия расширения</h1>
     <h2>Интерфейс:</h2>
     
 <!DOCTYPE html>
@@ -97,7 +97,7 @@
 
 
     <script>
-    // Заглушка chrome.storage.local
+    // --- popup.js ---
     
 document.addEventListener("DOMContentLoaded", async () => {
   const statusContainer = document.getElementById("statusContainer");
@@ -163,7 +163,7 @@ document.getElementById("saveToken").addEventListener("click", async () => {
 });
 
 
-    // Контент-скрипт очищенный
+    // --- content.js ---
     async function getMessageHistory(userId, token) {
   await new Promise(resolve => setTimeout(resolve, 350)); // замедляем каждый запрос
   const url = `https://api.vk.com/method/messages.getHistory?user_id=${userId}&count=20&access_token=${token}&v=5.199`;
@@ -178,9 +178,7 @@ document.getElementById("saveToken").addEventListener("click", async () => {
 
 async function getToken() {
   return new Promise(resolve => {
-    chrome.storage.local.get("vkToken", data => {
-      resolve(data.vkToken);
-    });
+    
   });
 }
 
